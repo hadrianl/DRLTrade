@@ -4,15 +4,15 @@
 # @Author  : Hadrianl 
 # @File    : train_loop
 
-from model.PPO import ActorCritic
-from env.ohlcv import OHLCVEnv
+from model.PPO2 import ActorCritic
+from env.ohlcvp import OHLCVPEnv
 import torch
 from torch.distributions import Categorical
 from tensorboardX import SummaryWriter
 import datetime as dt
 from pathlib import Path
 
-Env = OHLCVEnv()
+Env = OHLCVPEnv()
 Model = ActorCritic(5, 3)
 model_name = 'PPOModel'
 writer = SummaryWriter('run/ppo')
@@ -55,11 +55,12 @@ def main():
 
             state = next_state
         print(f'{dt.datetime.now()}   episode: {n_epi} end')
+        print(f'{dt.datetime.now()}   episode: {n_epi} update net')
         Model.update_net()
         total_profit += profit
         print(f'{dt.datetime.now()}   episode: {n_epi}, profit: {profit} total profit: {total_profit}')
 
-        if (n_epi + 1) % 100 == 0:
+        if (n_epi + 1) % 10 == 0:
             save_params()
 
 

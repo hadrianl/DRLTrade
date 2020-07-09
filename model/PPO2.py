@@ -26,10 +26,17 @@ T_horizon = 20
 
 class ActorCritic(nn.Module):
     def __init__(self, state_dim, action_dim):
+        """
+
+        :param state_dim: not include ohlcv and pos
+        :param action_dim:
+        """
         super().__init__()
         self.data = defaultdict(list)
 
-        self.fc_1 = nn.Linear(state_dim, 64)
+        self.ohlc_con = nn.Linear(4, 48)
+        self.vol_con = nn.Linear(1, 8)
+        self.pos_con = nn.Linear(1, 8)
         self.lstm = nn.LSTM(64, 32)
         self.fc_actor = nn.Linear(32, action_dim)
         self.fc_critic = nn.Linear(32, 1)
@@ -37,7 +44,22 @@ class ActorCritic(nn.Module):
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
 
     def act(self, x, hidden):
-        x = F.relu(self.fc_1(x))
+        # x -> o h l c v p
+        ohlc = F.relu(self.ohlc_con(x[:4]))
+        vol = F.relu(self.vol_con(x[4:5]))
+        pos = F.relu(self.pos_con(x[5:6]))
+        x = torch.cat([ohlc, vol, pos])
+        x = x.view(-1, 1, 64)
+        x, lstm_hidden = self.lstm(x, hidden)
+        x = self.fc_actor(x)
+        prob = F.softmax(x, dim=2)
+        return prob, lstm_hidden
+
+    def pi(self, x, hidden):
+        ohlc = F.relu(self.ohlc_con(x[:, :4]))
+        vol = F.relu(self.vol_con(x[:, 4:5]))
+        pos = F.relu(self.pos_con(x[:, 5:6]))
+        x = torch.cat([ohlc, vol, pos], dim=1)
         x = x.view(-1, 1, 64)
         x, lstm_hidden = self.lstm(x, hidden)
         x = self.fc_actor(x)
@@ -45,7 +67,10 @@ class ActorCritic(nn.Module):
         return prob, lstm_hidden
 
     def criticize(self, x, hidden):
-        x = F.relu(self.fc_1(x))
+        ohlc = F.relu(self.ohlc_con(x[:, :4]))
+        vol = F.relu(self.vol_con(x[:, 4:5]))
+        pos = F.relu(self.pos_con(x[:, 5:6]))
+        x = torch.cat([ohlc, vol, pos], dim=1)
         x = x.view(-1, 1, 64)
         x, _ = self.lstm(x, hidden)
         v = self.fc_critic(x)
@@ -75,7 +100,6 @@ class ActorCritic(nn.Module):
 
     def update_net(self):
         state, action, reward, next_state, action_prob, (h1_in, h2_in), (h1_out, h2_out), isDone = self.get_batch()
-
         first_hidden = (h1_in.detach(), h2_in.detach())
         second_hidden = (h1_out.detach(), h2_out.detach())
 
@@ -93,7 +117,7 @@ class ActorCritic(nn.Module):
                 advantages.append(advantage)
             advantages = reversed(torch.tensor([advantages], dtype=torch.float).T)
 
-            pi, _ = self.act(state, first_hidden)
+            pi, _ = self.pi(state, first_hidden)
             pi_action = pi.squeeze(1).gather(1, action)
 
             ratio = torch.exp(torch.log(pi_action) - torch.log(action_prob))

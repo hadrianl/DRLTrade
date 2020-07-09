@@ -15,7 +15,7 @@ import torch
 codes = [f'HSI{y}{m:02}' for y in range(11, 21) for m in range(1, 13)][:-7]
 
 
-class OHLCVEnv:
+class OHLCVPEnv:
     def __init__(self, fee=19.05, initial_capital=200000, margin=150000, period='1min'):
         self.initial_capital = initial_capital
         self.fee = fee
@@ -40,7 +40,7 @@ class OHLCVEnv:
         total_sample = self._data_source.objects(code=c, datetime__gte=d)
         count = total_sample.count()
         start = random.randint(0, count - 1000)
-        return total_sample[start:start + 500].values_list('open', 'high', 'low', 'close', 'volume')
+        return torch.tensor(total_sample[start:start + 500].values_list('open', 'high', 'low', 'close', 'volume'), dtype=torch.float)
 
     def reset(self):
         self.balance = self.initial_capital
@@ -50,50 +50,10 @@ class OHLCVEnv:
         self.pnl = 0
         self.data = self.get_sample()
         v = self.data[self.current_nbar]
-        self.init_state = np.array([v[0]] * 4 + [0])
-        ohlcv = np.array(v) - self.init_state
+        self.init_state = np.array([v[0]] * 4 + [0, 0])
+        ohlcv = np.concatenate([v, [self.position]]) - self.init_state
         return ohlcv
 
-    # def step(self, action):
-    #     isDone = False
-    #     fee = 0
-    #     if action == 1:
-    #         if self.position >= 0:
-    #             if self.balance > self.margin:
-    #                 self.position += 1
-    #                 self.balance -= self.margin
-    #                 fee = self.fee
-    #         else:
-    #             self.position += 1
-    #             self.balance += self.margin
-    #             fee = self.fee
-    #     elif action == 2:
-    #         if self.position <= 0:
-    #             if self.balance > self.margin:
-    #                 self.position -= 1
-    #                 self.balance -= self.margin
-    #                 fee = self.fee
-    #         else:
-    #             self.position -= 1
-    #             self.balance += self.margin
-    #             fee = self.fee
-    #
-    #     current_close = self.data[self.current_nbar][3]
-    #     self.current_nbar += 1
-    #     if self.current_nbar == 499:
-    #         isDone = True
-    #     next_close = self.data[self.current_nbar][3]
-    #
-    #     reward = self.position * (next_close - current_close) * self.multiplier - fee
-    #     self.pnl += reward
-    #     if self.pnl <= -self.initial_capital * 0.2:
-    #         isDone = True
-    #
-    #     next_state = np.array(self.data[self.current_nbar]) - self.init_state
-    #
-    #     return next_state, reward, isDone, self.pnl
-
-    # adjust pos instead of order
     def step(self, action):
         isDone = False
         fee = 0
@@ -112,18 +72,18 @@ class OHLCVEnv:
                 fee = pos * self.fee
             self.position = -1
 
-        current_close = self.data[self.current_nbar][3]
+        current_close = self.data[self.current_nbar, 3]
         self.current_nbar += 1
         if self.current_nbar == 499:
             isDone = True
-        next_close = self.data[self.current_nbar][3]
+        next_close = self.data[self.current_nbar, 3]
 
         reward = self.position * (next_close - current_close) * self.multiplier - fee
-        print(f'pos: {self.position} fee: {fee} reward: {reward} cur_close: {current_close} next_close: {next_close}')
+        # print(f'pos: {self.position} fee: {fee} reward: {reward} cur_close: {current_close} next_close: {next_close}')
         self.pnl += reward
         if self.pnl <= -self.initial_capital * 0.2:
             isDone = True
 
-        next_state = np.array(self.data[self.current_nbar]) - self.init_state
+        next_state = np.concatenate([self.data[self.current_nbar], [self.position]]) - self.init_state
 
         return next_state, reward, isDone, self.pnl
