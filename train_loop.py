@@ -26,8 +26,7 @@ def load_params(path=''):
     except Exception as e:
         print(f'no model is found, {e}')
     finally:
-        # print(f'load model state: {Model.state_dict()}')
-        ...
+        print(f'load model state: {Model.state_dict()}')
 
 def save_params(path=''):
     print('save_params')
@@ -43,22 +42,21 @@ def main():
         state = Env.reset()
         isDone = False
 
+        print(f'{dt.datetime.now()}   episode: {n_epi} begin')
         while not isDone:
             hidden_in = hidden_out
             prob, hidden_out = Model.act(torch.from_numpy(state).float(), hidden_in)
             prob = prob.view(-1)
             action = Categorical(prob).sample().item()
-
             # step once, get the next state and reward
             next_state, reward, isDone, profit = Env.step(action)
 
             Model.put_data((state, action, reward, next_state, prob[action].item(), hidden_in, hidden_out, isDone))
 
             state = next_state
-
+        print(f'{dt.datetime.now()}   episode: {n_epi} end')
         Model.update_net()
         total_profit += profit
-
         print(f'{dt.datetime.now()}   episode: {n_epi}, profit: {profit} total profit: {total_profit}')
 
         if (n_epi + 1) % 100 == 0:

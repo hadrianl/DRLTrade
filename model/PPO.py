@@ -45,7 +45,7 @@ class ActorCritic(nn.Module):
         return prob, lstm_hidden
 
     def criticize(self, x, hidden):
-        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc_1(x))
         x = x.view(-1, 1, 64)
         x, _ = self.lstm(x, hidden)
         v = self.fc_critic(x)
@@ -66,7 +66,7 @@ class ActorCritic(nn.Module):
         state = torch.tensor(self.data['state'], dtype=torch.float)
         action = torch.tensor([self.data['action']]).T
         reward = torch.tensor([self.data['reward']]).T
-        next_state = torch.tensor(self.data['next_state'], dype=torch.float)
+        next_state = torch.tensor(self.data['next_state'], dtype=torch.float)
         action_prob = torch.tensor([self.data['action_prob']]).T
         isDone = torch.tensor([self.data['isDone']]).T
 
@@ -91,7 +91,7 @@ class ActorCritic(nn.Module):
             for item in delta[::-1]:
                 advantage = gamma * lmbda * advantage + item[0]
                 advantages.append(advantage)
-            advantages = reversed(torch.Tensor([advantages], dtype=torch.float).T)
+            advantages = reversed(torch.tensor([advantages], dtype=torch.float).T)
 
             pi, _ = self.act(state, first_hidden)
             pi_action = pi.squeeze(1).gather(1, action)

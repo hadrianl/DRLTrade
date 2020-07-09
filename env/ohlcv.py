@@ -54,29 +54,63 @@ class OHLCVEnv:
         ohlcv = np.array(v) - self.init_state
         return ohlcv
 
+    # def step(self, action):
+    #     isDone = False
+    #     fee = 0
+    #     if action == 1:
+    #         if self.position >= 0:
+    #             if self.balance > self.margin:
+    #                 self.position += 1
+    #                 self.balance -= self.margin
+    #                 fee = self.fee
+    #         else:
+    #             self.position += 1
+    #             self.balance += self.margin
+    #             fee = self.fee
+    #     elif action == 2:
+    #         if self.position <= 0:
+    #             if self.balance > self.margin:
+    #                 self.position -= 1
+    #                 self.balance -= self.margin
+    #                 fee = self.fee
+    #         else:
+    #             self.position -= 1
+    #             self.balance += self.margin
+    #             fee = self.fee
+    #
+    #     current_close = self.data[self.current_nbar][3]
+    #     self.current_nbar += 1
+    #     if self.current_nbar == 499:
+    #         isDone = True
+    #     next_close = self.data[self.current_nbar][3]
+    #
+    #     reward = self.position * (next_close - current_close) * self.multiplier - fee
+    #     self.pnl += reward
+    #     if self.pnl <= -self.initial_capital * 0.2:
+    #         isDone = True
+    #
+    #     next_state = np.array(self.data[self.current_nbar]) - self.init_state
+    #
+    #     return next_state, reward, isDone, self.pnl
+
+    # adjust pos instead of order
     def step(self, action):
         isDone = False
         fee = 0
-        if action == 1:
-            if self.position >= 0:
-                if self.balance > self.margin:
-                    self.position += 1
-                    self.balance -= self.margin
-                    fee = self.fee
-            else:
-                self.position += 1
-                self.balance += self.margin
-                fee = self.fee
-        elif action == 2:
+        if action == 0:
+            if self.position != 0:
+                fee = self.fee * abs(self.position)
+            self.position = 0
+        elif action == 1:
             if self.position <= 0:
-                if self.balance > self.margin:
-                    self.position -= 1
-                    self.balance -= self.margin
-                    fee = self.fee
-            else:
-                self.position -= 1
-                self.balance += self.margin
-                fee = self.fee
+                pos = 1 - self.position
+                fee = pos * self.fee
+            self.position = 1
+        elif action == 2:
+            if self.position >= 0:
+                pos = self.position + 1
+                fee = pos * self.fee
+            self.position = -1
 
         current_close = self.data[self.current_nbar][3]
         self.current_nbar += 1
