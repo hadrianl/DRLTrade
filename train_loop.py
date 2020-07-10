@@ -37,7 +37,7 @@ def save_params(path=''):
 def main():
     load_params()
     total_profit = 0
-    for n_epi in range(1000):
+    for n_epi in range(2000):
         hidden_out = (torch.zeros([1, 1, 32], dtype=torch.float), torch.zeros([1, 1, 32], dtype=torch.float))
         state = Env.reset()
         isDone = False

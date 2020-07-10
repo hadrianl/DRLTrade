@@ -73,9 +73,12 @@ class ActorCritic(nn.Module):
         return state, action, reward, next_state, action_prob, \
                self.data['hidden_in'][0], self.data['hidden_out'][0], isDone
 
+    def clear_data(self):
+        self.data = defaultdict(list)
+
     def update_net(self):
         state, action, reward, next_state, action_prob, (h1_in, h2_in), (h1_out, h2_out), isDone = self.get_batch()
-
+        self.clear_data()
         first_hidden = (h1_in.detach(), h2_in.detach())
         second_hidden = (h1_out.detach(), h2_out.detach())
 

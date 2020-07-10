@@ -14,6 +14,8 @@ from torch.distributions import Categorical
 import time
 import numpy as np
 from collections import defaultdict
+import datetime as dt
+from memory_profiler import profile
 
 # Hyperparameters
 learning_rate = 0.0001
@@ -87,6 +89,9 @@ class ActorCritic(nn.Module):
         self.data['hidden_out'].append(next(_iter))
         self.data['isDone'].append(next(_iter))
 
+    def clear_data(self):
+        self.data = defaultdict(list)
+
     def get_batch(self):
         state = torch.tensor(self.data['state'], dtype=torch.float)
         action = torch.tensor([self.data['action']]).T
@@ -98,8 +103,10 @@ class ActorCritic(nn.Module):
         return state, action, reward, next_state, action_prob, \
                self.data['hidden_in'][0], self.data['hidden_out'][0], isDone
 
+    # @profile(precision=4,stream=open('memory_profiler.log','w+'))
     def update_net(self):
         state, action, reward, next_state, action_prob, (h1_in, h2_in), (h1_out, h2_out), isDone = self.get_batch()
+        self.clear_data()
         first_hidden = (h1_in.detach(), h2_in.detach())
         second_hidden = (h1_out.detach(), h2_out.detach())
 
@@ -129,6 +136,8 @@ class ActorCritic(nn.Module):
             loss = action_loss + F.smooth_l1_loss(v_state, td_target.detach())
 
             self.optimizer.zero_grad()
+            print(f'{dt.datetime.now()}  begin backward')
             loss.mean().backward(retain_graph=True) # backward K_epoch, so retain the graph
+            print(f'{dt.datetime.now()}  end backward')
             self.optimizer.step()
 
