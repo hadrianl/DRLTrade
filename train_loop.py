@@ -8,14 +8,15 @@ from model.PPO2 import ActorCritic
 from env.ohlcvp import OHLCVPEnv
 import torch
 from torch.distributions import Categorical
-from tensorboardX import SummaryWriter
 import datetime as dt
 from pathlib import Path
+from utils import Writer
 
 Env = OHLCVPEnv()
 Model = ActorCritic(5, 3)
 model_name = 'PPOModel'
-writer = SummaryWriter('run/ppo')
+Writer.add_graph(Model, [torch.zeros(6, dtype=torch.float), (torch.zeros([1, 1, 32], dtype=torch.float), torch.zeros([1, 1, 32], dtype=torch.float))])
+
 
 def load_params(path=''):
     print('load_params')
@@ -37,7 +38,7 @@ def save_params(path=''):
 def main():
     load_params()
     total_profit = 0
-    for n_epi in range(2000):
+    for n_epi in range(100000):
         hidden_out = (torch.zeros([1, 1, 32], dtype=torch.float), torch.zeros([1, 1, 32], dtype=torch.float))
         state = Env.reset()
         isDone = False
@@ -58,9 +59,11 @@ def main():
         print(f'{dt.datetime.now()}   episode: {n_epi} update net')
         Model.update_net()
         total_profit += profit
+        Writer.add_scalar('profit', profit)
+        Writer.add_scalar('total_profit', total_profit)
         print(f'{dt.datetime.now()}   episode: {n_epi}, profit: {profit} total profit: {total_profit}')
 
-        if (n_epi + 1) % 10 == 0:
+        if (n_epi + 1) % 100 == 0:
             save_params()
 
 

@@ -8,7 +8,9 @@
 from mongoengine import Document, StringField, FloatField, IntField, DateTimeField
 import json
 from pathlib import Path
+from tensorboardX import SummaryWriter
 
+Writer = SummaryWriter('run/ppo')
 CURDIR = Path.cwd()
 
 def load_json_settings(filename: str):

@@ -16,6 +16,7 @@ import numpy as np
 from collections import defaultdict
 import datetime as dt
 from memory_profiler import profile
+from utils import Writer
 
 # Hyperparameters
 learning_rate = 0.0001
@@ -44,6 +45,9 @@ class ActorCritic(nn.Module):
         self.fc_critic = nn.Linear(32, 1)
 
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
+
+    def forward(self, x, hidden):
+        return self.act(x, hidden)
 
     def act(self, x, hidden):
         # x -> o h l c v p
@@ -136,8 +140,8 @@ class ActorCritic(nn.Module):
             loss = action_loss + F.smooth_l1_loss(v_state, td_target.detach())
 
             self.optimizer.zero_grad()
-            print(f'{dt.datetime.now()}  begin backward')
-            loss.mean().backward(retain_graph=True) # backward K_epoch, so retain the graph
-            print(f'{dt.datetime.now()}  end backward')
+            loss_mean = loss.mean()
+            Writer.add_scalar('Loss', loss_mean)
+            loss_mean.backward(retain_graph=True) # backward K_epoch, so retain the graph
             self.optimizer.step()
 

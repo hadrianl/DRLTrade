@@ -75,6 +75,7 @@ class OHLCVPEnv:
         current_close = self.data[self.current_nbar, 3]
         self.current_nbar += 1
         if self.current_nbar == 499:
+            self.pnl -= self.initial_capital * 0.08 / 250
             isDone = True
         next_close = self.data[self.current_nbar, 3]
 
@@ -82,6 +83,7 @@ class OHLCVPEnv:
         # print(f'pos: {self.position} fee: {fee} reward: {reward} cur_close: {current_close} next_close: {next_close}')
         self.pnl += reward
         if self.pnl <= -self.initial_capital * 0.2:
+            self.pnl -= self.initial_capital * 0.08 / 250
             isDone = True
 
         next_state = np.concatenate([self.data[self.current_nbar], [self.position]]) - self.init_state
