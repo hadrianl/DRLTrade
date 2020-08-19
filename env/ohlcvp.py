@@ -57,9 +57,11 @@ class OHLCVPEnv:
     def step(self, action):
         isDone = False
         fee = 0
+        pos = 0
         if action == 0:
             if self.position != 0:
-                fee = self.fee * abs(self.position)
+                pos = abs(self.position)
+                fee = self.fee * pos
             self.position = 0
         elif action == 1:
             if self.position <= 0:
@@ -88,4 +90,4 @@ class OHLCVPEnv:
 
         next_state = np.concatenate([self.data[self.current_nbar], [self.position]]) - self.init_state
 
-        return next_state, reward, isDone, self.pnl
+        return next_state, reward, isDone, self.pnl, pos

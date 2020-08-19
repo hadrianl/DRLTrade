@@ -10,6 +10,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+from torch.nn.utils.rnn import pack_sequence
 from torch.distributions import Categorical
 import time
 import numpy as np
@@ -37,12 +38,16 @@ class ActorCritic(nn.Module):
         super().__init__()
         self.data = defaultdict(list)
 
-        self.ohlc_con = nn.Linear(4, 48)
-        self.vol_con = nn.Linear(1, 8)
-        self.pos_con = nn.Linear(1, 8)
-        self.lstm = nn.LSTM(64, 32)
-        self.fc_actor = nn.Linear(32, action_dim)
-        self.fc_critic = nn.Linear(32, 1)
+        self.ohlc_con = nn.Linear(4, 96)
+        self.vol_con = nn.Linear(1, 16)
+        self.pos_con = nn.Linear(1, 16)
+        self.ohlc_expand_con = nn.Linear(96, 128)
+        self.vol_expand_con = nn.Linear(16, 128)
+        self.pos_expand_con = nn.Linear(16, 128)
+        self.all_con = nn.Linear(128, 256)
+        self.lstm = nn.LSTM(256, 128)
+        self.fc_actor = nn.Linear(128, action_dim)
+        self.fc_critic = nn.Linear(128, 1)
 
         self.optimizer = optim.Adam(self.parameters(), lr=learning_rate)
 
@@ -51,33 +56,57 @@ class ActorCritic(nn.Module):
 
     def act(self, x, hidden):
         # x -> o h l c v p
-        ohlc = F.relu(self.ohlc_con(x[:4]))
-        vol = F.relu(self.vol_con(x[4:5]))
-        pos = F.relu(self.pos_con(x[5:6]))
-        x = torch.cat([ohlc, vol, pos])
-        x = x.view(-1, 1, 64)
+        ohlc = self.ohlc_con(x[:4])
+        vol = self.vol_con(x[4:5])
+        pos = self.pos_con(x[5:6])
+
+        ohlc_e = self.ohlc_expand_con(ohlc)
+        vol_e = self.vol_expand_con(vol)
+        pos_e = self.pos_expand_con(pos)
+        ohlc_e_x = F.relu(self.all_con(ohlc_e))
+        vol_e_x = F.relu(self.all_con(vol_e))
+        pos_e_x = F.relu(self.all_con(pos_e))
+        x = ohlc_e_x + vol_e_x + pos_e_x
+
+        x = x.view(-1, 1, 256)
         x, lstm_hidden = self.lstm(x, hidden)
         x = self.fc_actor(x)
         prob = F.softmax(x, dim=2)
         return prob, lstm_hidden
 
     def pi(self, x, hidden):
-        ohlc = F.relu(self.ohlc_con(x[:, :4]))
-        vol = F.relu(self.vol_con(x[:, 4:5]))
-        pos = F.relu(self.pos_con(x[:, 5:6]))
-        x = torch.cat([ohlc, vol, pos], dim=1)
-        x = x.view(-1, 1, 64)
+        ohlc = self.ohlc_con(x[:, :4])
+        vol = self.vol_con(x[:, 4:5])
+        pos = self.pos_con(x[:, 5:6])
+
+        ohlc_e = self.ohlc_expand_con(ohlc)
+        vol_e = self.vol_expand_con(vol)
+        pos_e = self.pos_expand_con(pos)
+        ohlc_e_x = F.relu(self.all_con(ohlc_e))
+        vol_e_x = F.relu(self.all_con(vol_e))
+        pos_e_x = F.relu(self.all_con(pos_e))
+        x = ohlc_e_x + vol_e_x + pos_e_x
+
+        x = x.view(-1, 1, 256)
         x, lstm_hidden = self.lstm(x, hidden)
         x = self.fc_actor(x)
         prob = F.softmax(x, dim=2)
         return prob, lstm_hidden
 
     def criticize(self, x, hidden):
-        ohlc = F.relu(self.ohlc_con(x[:, :4]))
-        vol = F.relu(self.vol_con(x[:, 4:5]))
-        pos = F.relu(self.pos_con(x[:, 5:6]))
-        x = torch.cat([ohlc, vol, pos], dim=1)
-        x = x.view(-1, 1, 64)
+        ohlc = self.ohlc_con(x[:, :4])
+        vol = self.vol_con(x[:, 4:5])
+        pos = self.pos_con(x[:, 5:6])
+
+        ohlc_e = self.ohlc_expand_con(ohlc)
+        vol_e = self.vol_expand_con(vol)
+        pos_e = self.pos_expand_con(pos)
+        ohlc_e_x = F.relu(self.all_con(ohlc_e))
+        vol_e_x = F.relu(self.all_con(vol_e))
+        pos_e_x = F.relu(self.all_con(pos_e))
+        x = ohlc_e_x + vol_e_x + pos_e_x
+
+        x = x.view(-1, 1, 256)
         x, _ = self.lstm(x, hidden)
         v = self.fc_critic(x)
         return v
