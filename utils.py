@@ -11,6 +11,7 @@ from pathlib import Path
 from tensorboardX import SummaryWriter
 
 Writer = SummaryWriter('run/ppo')
+Writer_test = SummaryWriter('run/test')
 CURDIR = Path.cwd()
 
 def load_json_settings(filename: str):

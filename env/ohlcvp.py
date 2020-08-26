@@ -11,17 +11,20 @@ import datetime as dt
 import numpy as np
 from mongoengine import register_connection
 import torch
+import calendar
 
-codes = [f'HSI{y}{m:02}' for y in range(11, 21) for m in range(1, 13)][:-7]
+codes = [f'HSI{y}{m:02}' for y in range(18, 21) for m in range(1, 13)][:-7]
 
 
 class OHLCVPEnv:
     def __init__(self, fee=19.05, initial_capital=200000, margin=150000, period='1min'):
+        self.data = None
         self.initial_capital = initial_capital
         self.fee = fee
         self.done = False
         self.current_nbar = 0
         self.position = 0
+        self.total_trades = 0
         self.margin = margin
         self.pnl = 0
         self.multiplier = 50
@@ -42,13 +45,31 @@ class OHLCVPEnv:
         start = random.randint(0, count - 1000)
         return torch.tensor(total_sample[start:start + 500].values_list('open', 'high', 'low', 'close', 'volume'), dtype=torch.float)
 
-    def reset(self):
+    def get_daily_sample(self):
+        c = random.choice(codes)
+        cal = calendar.Calendar()
+        year = int(f'20{c[3:5]}')
+        month = int(c[5:])
+        ds = []
+        for day, weekday in cal.itermonthdays2(year, month):
+            if day != 0 and weekday not in [5, 6]:
+                ds.append(day)
+
+        day = random.choice(ds[:-2])
+        d = dt.datetime(year=year, month=month, day=day, hour=9, minute=0)
+        total_sample = self._data_source.objects(code=c, datetime__gte=d)
+        sample = total_sample[:500]
+        print(sample.first().datetime)
+        return torch.tensor(sample.values_list('open', 'high', 'low', 'close', 'volume'), dtype=torch.float) if sample.count() >= 500 else self.get_daily_sample()
+
+    def reset(self, daily=False):
         self.balance = self.initial_capital
         self.position = 0
+        self.total_trades = 0
         self.current_nbar = 0
         self.market_value = 0
         self.pnl = 0
-        self.data = self.get_sample()
+        self.data = self.get_daily_sample() if daily else self.get_sample()
         v = self.data[self.current_nbar]
         self.init_state = np.array([v[0]] * 4 + [0, 0])
         ohlcv = np.concatenate([v, [self.position]]) - self.init_state
@@ -58,6 +79,7 @@ class OHLCVPEnv:
         isDone = False
         fee = 0
         pos = 0
+        extra_rewards = 0
         if action == 0:
             if self.position != 0:
                 pos = abs(self.position)
@@ -74,18 +96,27 @@ class OHLCVPEnv:
                 fee = pos * self.fee
             self.position = -1
 
+        self.total_trades += pos
+
         current_close = self.data[self.current_nbar, 3]
         self.current_nbar += 1
         if self.current_nbar == 499:
-            self.pnl -= self.initial_capital * 0.08 / 250
+            self.pnl -= self.initial_capital * 0.08 / 250 / 50
             isDone = True
+
+            # give neg rewards to control the trade frequency
+            # if self.total_trades < 2:
+            #     extra_rewards = -2
+            # elif self.total_trades > 10:
+            #     extra_rewards = 10 - self.total_trades
+
         next_close = self.data[self.current_nbar, 3]
 
-        reward = self.position * (next_close - current_close) * self.multiplier - fee
+        reward = self.position * (next_close - current_close) - fee / self.multiplier + extra_rewards
         # print(f'pos: {self.position} fee: {fee} reward: {reward} cur_close: {current_close} next_close: {next_close}')
         self.pnl += reward
         if self.pnl <= -self.initial_capital * 0.2:
-            self.pnl -= self.initial_capital * 0.08 / 250
+            self.pnl -= self.initial_capital * 0.08 / 250 / 50
             isDone = True
 
         next_state = np.concatenate([self.data[self.current_nbar], [self.position]]) - self.init_state
