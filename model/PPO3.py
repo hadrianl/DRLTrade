@@ -23,7 +23,7 @@ from pathlib import Path
 # Hyperparameters
 learning_rate = 0.0001
 gamma = 0.9999
-lmbda = 0.95
+lmbda = 0.98
 ent = 0.001
 eps_clip = 0.1
 K_epoch = 3
@@ -70,11 +70,11 @@ class PPO:
     ACTOR_LREANING_RATE = 1e-3
     CRITIC_LREANING_RATE = 1e-4
     PPO_EPOCH = 3
-    def __init__(self, state_dim):
+    def __init__(self, state_dim, action_dim):
         self.data = defaultdict(list)
-        self.actor_net = Actor(state_dim, 3)
+        self.actor_net = Actor(state_dim, action_dim)
         self.critic_net = Critic(state_dim)
-        self.lstm_hidden = (torch.randn([1, 1, 128], dtype=torch.float, requires_grad=False), torch.randn([1, 1, 128], dtype=torch.float, requires_grad=False))
+        self.lstm_hidden = (torch.zeros([1, 1, 128], dtype=torch.float, requires_grad=False), torch.zeros([1, 1, 128], dtype=torch.float, requires_grad=False))
         self.acotr_optimizer = optim.Adam(self.actor_net.parameters(), self.ACTOR_LREANING_RATE)
         self.critic_optimizer = optim.Adam(self.critic_net.parameters(), self.CRITIC_LREANING_RATE)
 
@@ -104,13 +104,13 @@ class PPO:
             print(f'load actor_net state: {self.actor_net.state_dict()}')
             print(f'load critic_net state: {self.critic_net.state_dict()}')
 
-    def save_param(self):
+    def save_params(self):
         torch.save(self.actor_net.state_dict(), './param/net_param/actor_net'+str(time.time())[:10] +'.pkl')
         torch.save(self.critic_net.state_dict(), './param/net_param/critic_net'+str(time.time())[:10] +'.pkl')
 
     def select_action(self, state):
         hidden_in = self.lstm_hidden
-        prob, hidden_out = self.actor_net(torch.from_numpy(state).float(), hidden_in)
+        prob, hidden_out = self.actor_net(state, hidden_in)
         prob = prob.view(-1)
         action = Categorical(prob).sample().item()
         self.lstm_hidden = (hidden_out[0].detach(), hidden_out[1].detach())
@@ -130,13 +130,15 @@ class PPO:
 
     def clear_data(self):
         self.data = defaultdict(list)
-        self.lstm_hidden = (torch.randn([1, 1, 128], dtype=torch.float, requires_grad=False), torch.randn([1, 1, 128], dtype=torch.float, requires_grad=False))
+        self.lstm_hidden = (torch.zeros([1, 1, 128], dtype=torch.float, requires_grad=False), torch.zeros([1, 1, 128], dtype=torch.float, requires_grad=False))
 
     def get_batch(self):
-        state = torch.tensor(self.data['state'], dtype=torch.float)
+        # state = torch.tensor(self.data['state'], dtype=torch.float)
+        state = torch.stack(self.data['state'])
         action = torch.tensor([self.data['action']]).T
         reward = torch.tensor([self.data['reward']]).T
-        next_state = torch.tensor(self.data['next_state'], dtype=torch.float)
+        # next_state = torch.tensor(self.data['next_state'], dtype=torch.float)
+        next_state = torch.stack(self.data['next_state'])
         action_prob = torch.tensor([self.data['action_prob']]).T
         done_mask = torch.tensor([self.data['done_mask']]).T
 
@@ -158,17 +160,19 @@ class PPO:
 
             advantages = []
             advantage = 0
+
             for item in delta[::-1]:
                 advantage = gamma * lmbda * advantage + item[0]
                 advantages.append(advantage)
-            advantages = reversed(torch.tensor([advantages], dtype=torch.float).T)
+            advantages.reverse()
+            advantages = torch.tensor([advantages], dtype=torch.float).T
+            # advantages = delta.detach()
 
             pi, _ = self.actor_net(state, first_hidden)
             new_action_prob = pi.squeeze(1).gather(1, action)
 
             # ratio between pi and old
             ratio = torch.exp(torch.log(new_action_prob) - torch.log(action_prob)) # importance weight?
-
 
             # SURROGATE
             surrogate1 = ratio * advantages
@@ -178,7 +182,8 @@ class PPO:
             a_loss = -torch.min(surrogate1, surrogate2).mean() # make sure strategy not too far away from the old one
             v_loss = F.smooth_l1_loss(v_state, td_target.detach()).mean()
             # e_loss = -Categorical(pi).entropy()
-
+            Writer.add_scalar('a_loss', a_loss)
+            Writer.add_scalar('v_loss', v_loss)
 
             # OPTIMIZER
             self.acotr_optimizer.zero_grad()
