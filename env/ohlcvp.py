@@ -117,7 +117,7 @@ class OHLCVPEnv:
 
         next_close = self.raw_data[self.current_nbar, 3]
 
-        reward = self.position * (next_close - current_close) / self.multiplier + extra_rewards
+        reward = self.position * (next_close - current_close) + extra_rewards
         # print(f'pos: {self.position} fee: {fee} reward: {reward} cur_close: {current_close} next_close: {next_close}')
         self.pnl += reward
         if self.pnl <= -self.initial_capital * 0.2:
